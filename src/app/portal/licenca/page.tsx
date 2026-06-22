@@ -1,13 +1,65 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ShieldAlert, AlertTriangle, ShieldCheck, Info } from "lucide-react";
+import { ShieldAlert, AlertTriangle, ShieldCheck, Info, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function PortalLicencaPage() {
-  const points = 0; // Exemplo de pontos tomados
+  const [isLoading, setIsLoading] = useState(true);
+  const [points, setPoints] = useState(0);
+  const [penaltyHistory, setPenaltyHistory] = useState<any[]>([]);
   const maxPoints = 12; // Exemplo de limite de pontos
+
+  const loadData = async () => {
+    setIsLoading(true);
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabaseClient = createClient();
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
+    const userId = session?.user?.id;
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Pega o piloto do usuário logado
+    const { data: myPilot } = await supabase.from('pilots').select('*').eq('profile_id', userId).single();
+    
+    if (myPilot) {
+      // Pega o histórico de incidentes onde este piloto foi penalizado com pontos na licença
+      const { data: incidentsData } = await supabase
+        .from('incidents')
+        .select('*, races(name, track_name)')
+        .eq('involved_pilot_id', myPilot.id)
+        .eq('status', 'resolved')
+        .gt('license_points', 0)
+        .order('resolved_at', { ascending: false });
+      
+      if (incidentsData) {
+        setPenaltyHistory(incidentsData);
+        // Calcula o total de pontos
+        const totalPoints = incidentsData.reduce((acc, curr) => acc + (curr.license_points || 0), 0);
+        setPoints(totalPoints);
+      }
+    }
+    
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -72,14 +124,14 @@ export default function PortalLicencaPage() {
         </Card>
 
         {/* Card Lateral: Histórico de Punições */}
-        <Card className="bg-card/40 border-border/50 backdrop-blur-md shadow-lg flex flex-col h-full">
-          <CardHeader className="border-b border-border/40 pb-4">
+        <Card className="bg-card/40 border-border/50 backdrop-blur-md shadow-lg flex flex-col h-full max-h-[600px]">
+          <CardHeader className="border-b border-border/40 pb-4 shrink-0">
             <CardTitle className="font-orbitron text-lg flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-primary" /> Histórico Disciplinar
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-4 flex-1 flex flex-col">
-            {points === 0 ? (
+          <CardContent className="pt-4 flex-1 flex flex-col overflow-y-auto">
+            {penaltyHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50 py-8">
                 <ShieldCheck className="w-16 h-16 mb-4 text-green-500" />
                 <p className="font-rajdhani font-bold text-lg text-foreground">Tudo Limpo!</p>
@@ -87,15 +139,22 @@ export default function PortalLicencaPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Aqui entraríamos com um loop de map caso tivessem pontos. Exemplo: */}
-                <div className="p-3 border border-border/50 bg-background/50 rounded-lg">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-rajdhani font-bold text-sm">GP de Mônaco</span>
-                    <span className="text-xs text-destructive font-bold">+2 pts</span>
+                {penaltyHistory.map(incident => (
+                  <div key={incident.id} className="p-3 border border-border/50 bg-background/50 rounded-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-rajdhani font-bold text-sm truncate max-w-[150px]">
+                        {incident.races?.name || incident.races?.track_name || 'GP'}
+                      </span>
+                      <span className="text-xs text-destructive font-bold whitespace-nowrap">+{incident.license_points} pts</span>
+                    </div>
+                    <p className="text-xs font-exo2 text-muted-foreground line-clamp-3" title={incident.official_decision || incident.description}>
+                      {incident.official_decision || "Incidente penalizado."}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-2 font-exo2 text-right">
+                      {new Date(incident.resolved_at || incident.created_at).toLocaleDateString('pt-BR')}
+                    </p>
                   </div>
-                  <p className="text-xs font-exo2 text-muted-foreground">Toque evitável causando rodada do adversário (Curva 1).</p>
-                  <p className="text-[10px] text-muted-foreground mt-2 font-exo2 text-right">01 Dez 2025</p>
-                </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -104,3 +163,4 @@ export default function PortalLicencaPage() {
     </div>
   );
 }
+

@@ -18,7 +18,7 @@ export default function ClassificacoesPage() {
       // Busca pilotos
       const { data: pilotsData } = await supabase
         .from('pilots')
-        .select('*, teams(name, color)')
+        .select('*, teams(name, color, logo_url), system_users(full_name, username)')
         .not('season_id', 'is', null);
       
       // Busca equipes
@@ -72,10 +72,12 @@ export default function ClassificacoesPage() {
         </div>
       ) : (
         <Tabs defaultValue="pilotos" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8 bg-card/50 border-border/50">
-            <TabsTrigger value="pilotos" className="font-rajdhani font-bold text-lg tracking-wider">MUNDIAL DE PILOTOS</TabsTrigger>
-            <TabsTrigger value="construtores" className="font-rajdhani font-bold text-lg tracking-wider">MUNDIAL DE CONSTRUTORES</TabsTrigger>
-          </TabsList>
+          <div className="flex justify-center mb-8">
+            <TabsList className="inline-flex h-auto w-full max-w-[600px] bg-card/50 border border-border/50 p-1.5 rounded-xl shadow-sm backdrop-blur-sm">
+              <TabsTrigger value="pilotos" className="flex-1 font-rajdhani font-bold text-sm md:text-base tracking-widest py-3 rounded-lg data-[state=active]:shadow-md transition-all">MUNDIAL DE PILOTOS</TabsTrigger>
+              <TabsTrigger value="construtores" className="flex-1 font-rajdhani font-bold text-sm md:text-base tracking-widest py-3 rounded-lg data-[state=active]:shadow-md transition-all">MUNDIAL DE CONSTRUTORES</TabsTrigger>
+            </TabsList>
+          </div>
           
           <TabsContent value="pilotos" className="space-y-4">
             <Card className="bg-card/40 border-border/50 backdrop-blur-md shadow-xl overflow-hidden">
@@ -100,13 +102,22 @@ export default function ClassificacoesPage() {
                           <Link href={`/profile/${pilot.profile_id || pilot.id}`} className="flex items-center gap-3">
                             <div className="w-1 h-8 rounded-full" style={{ backgroundColor: pilot.teams?.color || '#555' }} />
                             <div>
-                              <p className="font-bold font-rajdhani text-lg group-hover:text-primary transition-colors">{pilot.name}</p>
-                              <p className="text-xs text-muted-foreground md:hidden">{pilot.teams?.name || "Agente Livre"}</p>
+                              <p className="font-bold font-rajdhani text-lg group-hover:text-primary transition-colors flex items-center gap-2">
+                                <span>{pilot.system_users?.full_name || pilot.system_users?.username || pilot.name}</span>
+                                {pilot.number && <span className="text-sm font-orbitron text-muted-foreground opacity-70">#{pilot.number}</span>}
+                              </p>
+                              <p className="text-xs text-muted-foreground md:hidden flex items-center gap-1.5 mt-0.5">
+                                {pilot.teams?.logo_url && <img src={pilot.teams.logo_url} alt={pilot.teams?.name} className="h-4 object-contain" />}
+                                {pilot.teams?.name || "Agente Livre"}
+                              </p>
                             </div>
                           </Link>
                         </td>
                         <td className="px-6 py-4 hidden md:table-cell text-muted-foreground">
-                          {pilot.teams?.name || "Agente Livre"}
+                          <div className="flex items-center gap-2">
+                            {pilot.teams?.logo_url && <img src={pilot.teams.logo_url} alt={pilot.teams?.name} className="h-6 object-contain" />}
+                            <span>{pilot.teams?.name || "Agente Livre"}</span>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right font-orbitron text-muted-foreground">
                           {pilot.stats?.wins || 0}
@@ -148,6 +159,7 @@ export default function ClassificacoesPage() {
                         </td>
                         <td className="px-6 py-4 flex items-center gap-3">
                           <div className="w-1 h-8 rounded-full" style={{ backgroundColor: team.color || '#555' }} />
+                          {team.logo_url && <img src={team.logo_url} alt={team.name} className="h-8 object-contain" />}
                           <p className="font-bold font-rajdhani text-lg">{team.name}</p>
                         </td>
                         <td className="px-6 py-4 text-right font-orbitron font-bold text-xl text-primary">

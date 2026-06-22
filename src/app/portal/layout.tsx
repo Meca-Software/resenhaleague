@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { User, Video, ShieldAlert, LogOut, ChevronLeft, Trophy, Settings } from "lucide-react";
+import { User, Video, ShieldAlert, LogOut, ChevronLeft, Trophy, Settings, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabase";
 
 const sidebarLinks = [
+  { name: "Próxima Corrida", href: "/portal/proxima-corrida", icon: Calendar },
   { name: "Configurações", href: "/portal", icon: Settings },
   { name: "Evidências e Corridas", href: "/portal/evidencias", icon: Video },
   { name: "Minha Super Licença", href: "/portal/licenca", icon: ShieldAlert },

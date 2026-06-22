@@ -9,6 +9,8 @@ import { Flag, Plus, Edit, ListOrdered, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const f1Calendar2026 = [
   { track: "Albert Park Circuit", country: "AU" },
@@ -51,6 +53,8 @@ export default function AdminCorridasPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [isCreatingRace, setIsCreatingRace] = useState(false);
+  const [raceToDelete, setRaceToDelete] = useState<any>(null);
+  const [raceToEdit, setRaceToEdit] = useState<any>(null);
 
   // Form Race
   const [raceSeasonId, setRaceSeasonId] = useState("");
@@ -185,11 +189,71 @@ export default function AdminCorridasPage() {
     fetchData();
   };
 
-  const handleDeleteRace = async (id: string) => {
-    if(confirm("Apagar esta corrida? Os resultados vinculados a ela serão perdidos.")) {
-      await supabase.from('races').delete().eq('id', id);
+  const handleDeleteRace = async () => {
+    if (!raceToDelete) return;
+
+    try {
+      // Force delete: apagar dados relacionados primeiro para evitar bloqueios de FK
+      await supabase.from('race_attendances').delete().eq('race_id', raceToDelete.id);
+      await supabase.from('qualifying_results').delete().eq('race_id', raceToDelete.id);
+      await supabase.from('race_results').delete().eq('race_id', raceToDelete.id);
+      await supabase.from('incidents').delete().eq('race_id', raceToDelete.id);
+      
+      const { data, error } = await supabase.from('races').delete().eq('id', raceToDelete.id).select();
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error("Permissão negada pelo banco (RLS) ou corrida não encontrada. Nada foi apagado.");
+      }
+      
+      toast.success("Corrida apagada com sucesso!");
       fetchData();
+    } catch (error: any) {
+      toast.error("Erro ao apagar: " + error.message);
     }
+    
+    setRaceToDelete(null);
+  };
+
+  const handleUpdateRace = async () => {
+    if (!raceToEdit) return;
+    
+    try {
+      let parsedDate = null;
+      if (raceToEdit.race_date) {
+        parsedDate = new Date(raceToEdit.race_date).toISOString();
+      }
+
+      const { data, error } = await supabase.from('races').update({
+        name: `Etapa ${raceToEdit.round_number} - ${raceToEdit.track_name}`,
+        circuit: raceToEdit.track_name,
+        track_name: raceToEdit.track_name,
+        country_code: raceToEdit.country_code,
+        race_date: parsedDate,
+        status: raceToEdit.status,
+        has_sprint: raceToEdit.has_sprint,
+        round_number: parseInt(raceToEdit.round_number)
+      }).eq('id', raceToEdit.id).select();
+
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error("Permissão negada pelo banco (RLS) ou corrida não encontrada. Nada foi alterado.");
+      }
+
+      toast.success("Corrida atualizada com sucesso!");
+      fetchData();
+      setRaceToEdit(null);
+    } catch (error: any) {
+      toast.error("Erro ao atualizar: " + error.message);
+    }
+  };
+
+  const formatDateForInput = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const tzOffset = date.getTimezoneOffset() * 60000; 
+    return (new Date(date.getTime() - tzOffset)).toISOString().slice(0, 16);
   };
 
   return (
@@ -333,6 +397,8 @@ export default function AdminCorridasPage() {
             <Table>
               <TableHeader className="bg-muted/50 font-rajdhani">
                 <TableRow>
+                  <TableHead>TEMPORADA</TableHead>
+                  <TableHead>ETAPA</TableHead>
                   <TableHead>PAÍS</TableHead>
                   <TableHead>CIRCUITO</TableHead>
                   <TableHead className="text-center">DATA</TableHead>
@@ -370,8 +436,9 @@ export default function AdminCorridasPage() {
                         {race.status.toUpperCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteRace(race.id)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="icon" onClick={() => setRaceToEdit({...race, race_date: formatDateForInput(race.race_date)})} className="text-primary hover:text-primary/80"><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => setRaceToDelete(race)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -385,6 +452,84 @@ export default function AdminCorridasPage() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={!!raceToDelete} onOpenChange={(open) => !open && setRaceToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive font-orbitron">Aviso: Apagar Corrida</DialogTitle>
+            <DialogDescription className="text-base text-foreground/80 mt-2">
+              Você tem certeza que deseja apagar a corrida <strong>{raceToDelete?.track_name}</strong>?
+            </DialogDescription>
+            <div className="bg-destructive/10 p-4 rounded-md border border-destructive/20 mt-4">
+              <p className="text-destructive font-bold text-sm">
+                Atenção: Ao confirmar, você perderá TODO o histórico desta corrida, incluindo:
+              </p>
+              <ul className="list-disc list-inside text-destructive/80 text-sm mt-2">
+                <li>Confirmações de presença</li>
+                <li>Resultados de qualificação e corrida</li>
+                <li>Punições e incidentes relatados</li>
+              </ul>
+              <p className="text-destructive/80 text-sm mt-2">Esta ação não pode ser desfeita.</p>
+            </div>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRaceToDelete(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteRace}>Apagar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!raceToEdit} onOpenChange={(open) => !open && setRaceToEdit(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Corrida</DialogTitle>
+            <DialogDescription>
+              Faça as alterações necessárias na etapa.
+            </DialogDescription>
+          </DialogHeader>
+          {raceToEdit && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Etapa (Número)</Label>
+                <Input type="number" value={raceToEdit.round_number} onChange={(e) => setRaceToEdit({...raceToEdit, round_number: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>País</Label>
+                <select value={raceToEdit.country_code} onChange={(e) => setRaceToEdit({...raceToEdit, country_code: e.target.value})} className="flex h-10 w-full rounded-md border border-input bg-background/80 px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  {countries.map(c => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Circuito</Label>
+                <Input value={raceToEdit.track_name} onChange={(e) => setRaceToEdit({...raceToEdit, track_name: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Data e Hora</Label>
+                <Input type="datetime-local" value={raceToEdit.race_date} onChange={(e) => setRaceToEdit({...raceToEdit, race_date: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <select value={raceToEdit.status} onChange={(e) => setRaceToEdit({...raceToEdit, status: e.target.value})} className="flex h-10 w-full rounded-md border border-input bg-background/80 px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  <option value="upcoming">Agendada</option>
+                  <option value="completed">Finalizada</option>
+                  <option value="cancelled">Cancelada</option>
+                </select>
+              </div>
+              <div className="space-y-2 flex flex-col justify-center">
+                <Label className="mb-2">Sprint?</Label>
+                <input type="checkbox" checked={raceToEdit.has_sprint} onChange={(e) => setRaceToEdit({...raceToEdit, has_sprint: e.target.checked})} className="w-5 h-5 accent-primary" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRaceToEdit(null)}>Cancelar</Button>
+            <Button onClick={handleUpdateRace} className="bg-primary hover:bg-primary/90">Salvar Alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

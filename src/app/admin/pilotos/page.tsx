@@ -55,6 +55,7 @@ export default function AdminPilotosPage() {
   const [pilotTeam, setPilotTeam] = useState("");
   const [pilotProfile, setPilotProfile] = useState(""); // system_users id
   const [pilotSeason, setPilotSeason] = useState(""); // season_id
+  const [pilotIsReserve, setPilotIsReserve] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -138,8 +139,9 @@ export default function AdminPilotosPage() {
       name: generatedName,
       number: parseInt(pilotNumber),
       season_id: pilotSeason,
-      current_team_id: pilotTeam || null,
+      current_team_id: pilotIsReserve ? null : (pilotTeam || null),
       profile_id: pilotProfile,
+      is_reserve: pilotIsReserve,
     };
 
     if (editingPilotId) {
@@ -156,6 +158,7 @@ export default function AdminPilotosPage() {
     setPilotTeam("");
     setPilotSeason("");
     setPilotProfile("");
+    setPilotIsReserve(false);
     setEditingPilotId(null);
     setIsCreatingPilot(false);
     fetchData();
@@ -166,6 +169,7 @@ export default function AdminPilotosPage() {
     setPilotTeam(pilot.current_team_id || "");
     setPilotSeason(pilot.season_id || "");
     setPilotProfile(pilot.profile_id || "");
+    setPilotIsReserve(pilot.is_reserve || false);
     setEditingPilotId(pilot.id);
     setIsCreatingPilot(true);
     setIsCreatingTeam(false);
@@ -323,12 +327,13 @@ export default function AdminPilotosPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-rajdhani uppercase font-bold text-muted-foreground">
-                  Equipe
+                  Equipe {pilotIsReserve ? "(Ignorado para Reserva)" : ""}
                 </label>
                 <select
                   value={pilotTeam}
                   onChange={(e) => setPilotTeam(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  disabled={pilotIsReserve}
+                  className="flex h-10 w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
                 >
                   <option value="">Sem equipe</option>
                   {teams.map((t) => (
@@ -337,6 +342,17 @@ export default function AdminPilotosPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2 flex flex-col justify-end">
+                <label className="flex items-center gap-2 text-sm font-rajdhani uppercase font-bold text-muted-foreground cursor-pointer h-10 px-3 bg-background/50 border border-border/50 rounded-md">
+                  <input
+                    type="checkbox"
+                    checked={pilotIsReserve}
+                    onChange={(e) => setPilotIsReserve(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span>Piloto Reserva? (Não exige equipe)</span>
+                </label>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-rajdhani uppercase font-bold text-primary">
@@ -357,7 +373,7 @@ export default function AdminPilotosPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => { setIsCreatingPilot(false); setEditingPilotId(null); }}>
+              <Button variant="ghost" onClick={() => { setIsCreatingPilot(false); setEditingPilotId(null); setPilotIsReserve(false); }}>
                 Cancelar
               </Button>
               <Button
@@ -480,7 +496,7 @@ export default function AdminPilotosPage() {
                         </div>
                       ) : (
                         <span className="text-muted-foreground">
-                          Agente Livre
+                          {pilot.is_reserve ? "Reserva" : "Agente Livre"}
                         </span>
                       )}
                     </TableCell>

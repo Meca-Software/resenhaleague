@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { NotificationBell } from "./NotificationBell";
 
 const navItems = [
   { name: "Home", href: "/" },
@@ -109,7 +110,9 @@ export function Navbar() {
         {/* Right side: Auth */}
         <div className="flex items-center justify-end space-x-4 flex-1">
           {role ? (
-            <DropdownMenu>
+            <div className="flex items-center">
+              <NotificationBell />
+              <DropdownMenu>
               <DropdownMenuTrigger className="relative h-10 w-10 rounded-full hidden sm:flex items-center justify-center outline-none hover:bg-accent hover:text-accent-foreground">
                 <Avatar className="h-10 w-10 border-2 border-primary/20 hover:border-primary transition-colors">
                   <AvatarImage src={userAvatar} alt="User" />
@@ -160,6 +163,14 @@ export function Navbar() {
                   <span>Enviar Evidências</span>
                 </DropdownMenuItem>
 
+                <DropdownMenuItem
+                  render={<Link href="/portal/proxima-corrida" />}
+                  className="cursor-pointer focus:bg-primary/10"
+                >
+                  <Trophy className="mr-2 h-4 w-4 text-primary" />
+                  <span>Confirmar Presença</span>
+                </DropdownMenuItem>
+
                 {(role === "superadmin" || role === "admin") && (
                   <DropdownMenuItem
                     render={<Link href="/admin" />}
@@ -196,6 +207,7 @@ export function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           ) : (
             <Link href="/login">
               <Button
@@ -252,6 +264,11 @@ export function Navbar() {
                   <Link href="/portal" onClick={() => setIsMobileMenuOpen(false)} className="block">
                     <Button className="w-full font-exo2 bg-primary/20 text-primary hover:bg-primary/30">
                       <Settings className="mr-2 h-4 w-4" /> Editar Perfil
+                    </Button>
+                  </Link>
+                  <Link href="/portal/proxima-corrida" onClick={() => setIsMobileMenuOpen(false)} className="block">
+                    <Button className="w-full font-exo2 bg-primary/20 text-primary hover:bg-primary/30">
+                      <Trophy className="mr-2 h-4 w-4" /> Confirmar Presença
                     </Button>
                   </Link>
                   {(role === "superadmin" || role === "admin") && (

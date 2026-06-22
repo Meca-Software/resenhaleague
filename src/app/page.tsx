@@ -22,7 +22,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import heroImage from "@/img/some-epic-f126-photos-v0-wdr3t5uo096h1.jpg";
 import Image from "next/image";
 
@@ -46,16 +46,40 @@ export default function Home() {
     lastWinner: { name: "Aguardando", race: "", points: 0 },
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isUserLogged, setIsUserLogged] = useState(false);
+  const [isPilot, setIsPilot] = useState(false);
+  const [pilotSeasonId, setPilotSeasonId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
+      let pSeasonId = null;
+      // Check auth user
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setIsUserLogged(true);
+        // check if is pilot
+        const { data: pilotsData } = await supabase.from('pilots').select('id, season_id').eq('profile_id', user.id).limit(1);
+        if (pilotsData && pilotsData.length > 0) {
+          setIsPilot(true);
+          pSeasonId = pilotsData[0].season_id;
+          setPilotSeasonId(pSeasonId);
+        }
+      }
+
       // 1. Next Race
-      const { data: racesData } = await supabase
+      let racesQuery = supabase
         .from("races")
         .select("*")
         .eq("status", "upcoming")
         .order("race_date", { ascending: true })
         .limit(1);
+        
+      if (pSeasonId) {
+        racesQuery = racesQuery.eq('season_id', pSeasonId);
+      }
+      
+      const { data: racesData } = await racesQuery;
 
       if (racesData && racesData.length > 0) {
         setNextRace(racesData[0]);
@@ -299,6 +323,16 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="flex flex-col sm:flex-row gap-4"
           >
+            {isUserLogged && isPilot && nextRace && (
+              <Link href="/portal/proxima-corrida">
+                <Button
+                  size="lg"
+                  className="font-rajdhani text-lg font-bold tracking-wider w-full sm:w-auto h-12 px-8 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  CONFIRMAR PRESENÇA
+                </Button>
+              </Link>
+            )}
             <Link href="/campeonatos">
               <Button
                 size="lg"
