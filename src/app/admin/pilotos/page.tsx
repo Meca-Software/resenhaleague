@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Users, Plus, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 const F1_LOGOS = [
@@ -41,6 +41,10 @@ export default function AdminPilotosPage() {
   // States de Formulários
   const [isCreatingPilot, setIsCreatingPilot] = useState(false);
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editingPilotId, setEditingPilotId] = useState<string | null>(null);
+
+  const supabase = createClient();
 
   // Form Team
   const [teamName, setTeamName] = useState("");
@@ -85,21 +89,43 @@ export default function AdminPilotosPage() {
     fetchData();
   }, []);
 
-  const handleCreateTeam = async () => {
+  const handleSaveTeam = async () => {
     if (!teamName) return toast.error("Preencha o nome da equipe");
     const payload: any = { name: teamName };
     if (teamLogo) payload.logo_url = `/f1_logos/${teamLogo}`;
+    else payload.logo_url = null;
 
-    const { error } = await supabase.from("teams").insert([payload]);
-    if (error) return toast.error(error.message);
+    if (editingTeamId) {
+      const { error } = await supabase.from("teams").update(payload).eq("id", editingTeamId);
+      if (error) return toast.error(error.message);
+      toast.success("Equipe atualizada!");
+    } else {
+      const { error } = await supabase.from("teams").insert([payload]);
+      if (error) return toast.error(error.message);
+      toast.success("Equipe criada!");
+    }
 
     setTeamName("");
     setTeamLogo("");
+    setEditingTeamId(null);
     setIsCreatingTeam(false);
     fetchData();
   };
 
-  const handleCreatePilot = async () => {
+  const handleEditTeam = (team: any) => {
+    setTeamName(team.name);
+    if (team.logo_url) {
+      setTeamLogo(team.logo_url.replace("/f1_logos/", ""));
+    } else {
+      setTeamLogo("");
+    }
+    setEditingTeamId(team.id);
+    setIsCreatingTeam(true);
+    setIsCreatingPilot(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSavePilot = async () => {
     if (!pilotNumber || !pilotSeason || !pilotProfile)
       return alert(
         "Preencha os campos obrigatórios (Número, Temporada e Vincular Conta)",
@@ -112,19 +138,38 @@ export default function AdminPilotosPage() {
       name: generatedName,
       number: parseInt(pilotNumber),
       season_id: pilotSeason,
+      current_team_id: pilotTeam || null,
+      profile_id: pilotProfile,
     };
-    if (pilotTeam) payload.current_team_id = pilotTeam;
-    if (pilotProfile) payload.profile_id = pilotProfile;
 
-    const { error } = await supabase.from("pilots").insert([payload]);
-    if (error) return toast.error(error.message);
+    if (editingPilotId) {
+      const { error } = await supabase.from("pilots").update(payload).eq("id", editingPilotId);
+      if (error) return toast.error(error.message);
+      toast.success("Piloto atualizado!");
+    } else {
+      const { error } = await supabase.from("pilots").insert([payload]);
+      if (error) return toast.error(error.message);
+      toast.success("Piloto criado!");
+    }
 
     setPilotNumber("");
     setPilotTeam("");
     setPilotSeason("");
     setPilotProfile("");
+    setEditingPilotId(null);
     setIsCreatingPilot(false);
     fetchData();
+  };
+
+  const handleEditPilot = (pilot: any) => {
+    setPilotNumber(pilot.number.toString());
+    setPilotTeam(pilot.current_team_id || "");
+    setPilotSeason(pilot.season_id || "");
+    setPilotProfile(pilot.profile_id || "");
+    setEditingPilotId(pilot.id);
+    setIsCreatingPilot(true);
+    setIsCreatingTeam(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeletePilot = async (id: string) => {
@@ -162,6 +207,7 @@ export default function AdminPilotosPage() {
             className="font-rajdhani font-bold"
             onClick={() => {
               setIsCreatingTeam(!isCreatingTeam);
+              if (isCreatingTeam) setEditingTeamId(null);
               setIsCreatingPilot(false);
             }}
           >
@@ -171,6 +217,7 @@ export default function AdminPilotosPage() {
             className="font-rajdhani font-bold"
             onClick={() => {
               setIsCreatingPilot(!isCreatingPilot);
+              if (isCreatingPilot) setEditingPilotId(null);
               setIsCreatingTeam(false);
             }}
           >
@@ -183,7 +230,7 @@ export default function AdminPilotosPage() {
         <Card className="bg-card/50 border-primary/50">
           <CardHeader>
             <CardTitle className="font-orbitron text-xl">
-              Cadastrar Nova Equipe
+              {editingTeamId ? "Editar Equipe" : "Cadastrar Nova Equipe"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -222,14 +269,14 @@ export default function AdminPilotosPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setIsCreatingTeam(false)}>
+              <Button variant="ghost" onClick={() => { setIsCreatingTeam(false); setEditingTeamId(null); }}>
                 Cancelar
               </Button>
               <Button
-                onClick={handleCreateTeam}
+                onClick={handleSaveTeam}
                 className="bg-green-600 hover:bg-green-700 font-bold"
               >
-                Salvar Equipe
+                {editingTeamId ? "Salvar Alterações" : "Salvar Equipe"}
               </Button>
             </div>
           </CardContent>
@@ -240,7 +287,7 @@ export default function AdminPilotosPage() {
         <Card className="bg-card/50 border-primary/50">
           <CardHeader>
             <CardTitle className="font-orbitron text-xl">
-              Cadastrar Novo Piloto
+              {editingPilotId ? "Editar Piloto" : "Cadastrar Novo Piloto"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -310,14 +357,14 @@ export default function AdminPilotosPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setIsCreatingPilot(false)}>
+              <Button variant="ghost" onClick={() => { setIsCreatingPilot(false); setEditingPilotId(null); }}>
                 Cancelar
               </Button>
               <Button
-                onClick={handleCreatePilot}
+                onClick={handleSavePilot}
                 className="bg-green-600 hover:bg-green-700 font-bold"
               >
-                Salvar Piloto
+                {editingPilotId ? "Salvar Alterações" : "Salvar Piloto"}
               </Button>
             </div>
           </CardContent>
@@ -340,14 +387,24 @@ export default function AdminPilotosPage() {
                   key={team.id}
                   className="flex flex-col items-center p-4 bg-background/50 rounded-lg border border-border/50 text-center gap-2 relative group"
                 >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteTeam(team.id)}
-                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive w-6 h-6"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                  <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditTeam(team)}
+                      className="text-blue-400 hover:text-blue-300 w-6 h-6"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteTeam(team.id)}
+                      className="text-destructive hover:text-destructive w-6 h-6"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
                   {team.logo_url ? (
                     <img
                       src={team.logo_url}
@@ -430,7 +487,15 @@ export default function AdminPilotosPage() {
                     <TableCell className="text-center font-orbitron font-bold text-lg">
                       {pilot.number}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditPilot(pilot)}
+                        className="text-blue-400 hover:text-blue-300"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

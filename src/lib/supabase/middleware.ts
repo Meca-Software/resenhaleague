@@ -37,6 +37,21 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // Force password change check
+  if (user && pathname !== '/change-password' && !pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+    const { data: systemUser } = await supabase
+      .from('system_users')
+      .select('requires_password_change')
+      .eq('id', user.id)
+      .single()
+      
+    if (systemUser?.requires_password_change) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/change-password'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Protect admin and portal routes
   if (pathname.startsWith('/admin') || pathname.startsWith('/portal')) {
     if (!user) {

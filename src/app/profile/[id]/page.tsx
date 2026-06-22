@@ -202,14 +202,22 @@ export default function PublicPilotProfile({
       return toast.error("A senha deve ter no mínimo 6 caracteres.");
     setIsSavingPassword(true);
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-
-    setIsSavingPassword(false);
-    if (error) {
-      toast.error("Erro ao alterar senha: " + error.message);
-    } else {
-      toast.success("Senha alterada com sucesso!");
-      setNewPassword("");
+    try {
+      const { forcePasswordChange } = await import("@/app/actions/auth-actions");
+      const response = await forcePasswordChange(newPassword);
+      
+      setIsSavingPassword(false);
+      
+      if (!response.success) {
+        toast.error("Erro ao alterar senha: " + response.error);
+      } else {
+        toast.success("Senha alterada com sucesso!");
+        setNewPassword("");
+      }
+    } catch (err) {
+      setIsSavingPassword(false);
+      toast.error("Erro inesperado ao alterar senha.");
+      console.error(err);
     }
   };
 

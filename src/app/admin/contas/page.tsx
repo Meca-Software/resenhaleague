@@ -7,8 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Users, Plus, Shield, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase";
-import { createSystemUser, deleteSystemUser } from "@/app/actions/auth-actions";
+import { createClient } from "@/lib/supabase/client";
+import { createSystemUser, updateSystemUser, deleteSystemUser } from "@/app/actions/auth-actions";
 import { toast } from "sonner";
 
 export default function AdminContasPage() {
@@ -22,6 +22,9 @@ export default function AdminContasPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("pilot");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const supabase = createClient();
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -47,8 +50,8 @@ export default function AdminContasPage() {
     fetchUsers();
   }, []);
 
-  const handleCreateUser = async () => {
-    if (!email || !username || !password) return toast.error("Preencha todos os campos!");
+  const handleSaveUser = async () => {
+    if (!email || !username || (!password && !editingId)) return toast.error("Preencha todos os campos obrigatórios!");
     setIsCreating(false);
     
     // Convert role_id to role name for the new action logic, mapping to English enum values
@@ -61,22 +64,45 @@ export default function AdminContasPage() {
     else if (rawRoleName.includes('piloto') || rawRoleName.includes('pilot')) roleEnum = 'pilot';
     else if (rawRoleName.includes('moderador') || rawRoleName.includes('moderator')) roleEnum = 'moderator';
 
-    const result = await createSystemUser({
-      email,
-      username,
-      password_hash: password,
-      role_id: role,
-      role: roleEnum
-    });
+    let result;
+    if (editingId) {
+      result = await updateSystemUser(editingId, {
+        email,
+        username,
+        password_hash: password || undefined,
+        role_id: role,
+        role: roleEnum
+      });
+    } else {
+      result = await createSystemUser({
+        email,
+        username,
+        password_hash: password,
+        role_id: role,
+        role: roleEnum
+      });
+    }
 
     if (!result.success) {
-      toast.error("Erro ao criar usuário: " + result.error);
+      toast.error(`Erro ao ${editingId ? 'atualizar' : 'criar'} usuário: ` + result.error);
     } else {
+      toast.success(`Usuário ${editingId ? 'atualizado' : 'criado'} com sucesso!`);
       setEmail("");
       setUsername("");
       setPassword("");
+      setEditingId(null);
       fetchUsers(); // Refresh
     }
+  };
+
+  const handleEditUser = (account: any) => {
+    setEmail(account.email);
+    setUsername(account.username);
+    setPassword("");
+    setRole(account.role_id || (rolesList.find(r => r.name === account.roles?.name)?.id || "pilot"));
+    setEditingId(account.id);
+    setIsCreating(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -98,16 +124,24 @@ export default function AdminContasPage() {
             Crie novos usuários, defina níveis de permissão (RBAC) e gerencie acessos ao sistema.
           </p>
         </div>
-        <Button className="font-rajdhani font-bold" onClick={() => setIsCreating(!isCreating)}>
-          <Plus className="w-4 h-4 mr-2" /> CRIAR NOVA CONTA
+        <Button className="font-rajdhani font-bold" onClick={() => {
+          setIsCreating(!isCreating);
+          if (isCreating) setEditingId(null);
+          else {
+            setEmail("");
+            setUsername("");
+            setPassword("");
+          }
+        }}>
+          <Plus className="w-4 h-4 mr-2" /> NOVA CONTA
         </Button>
       </div>
 
       {isCreating && (
         <Card className="bg-card/50 border-primary/50">
           <CardHeader>
-            <CardTitle className="font-orbitron text-xl">Registrar Novo Usuário</CardTitle>
-            <CardDescription className="font-exo2">Este usuário poderá acessar o painel correspondente ao seu cargo.</CardDescription>
+            <CardTitle className="font-orbitron text-xl">{editingId ? "Editar Usuário" : "Registrar Novo Usuário"}</CardTitle>
+            <CardDescription className="font-exo2">{editingId ? "Atualize as informações de acesso." : "Este usuário poderá acessar o painel correspondente ao seu cargo."}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 font-exo2">
@@ -126,10 +160,10 @@ export default function AdminContasPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-rajdhani uppercase font-bold text-muted-foreground">Senha Provisória</label>
+                <label className="text-xs font-rajdhani uppercase font-bold text-muted-foreground">{editingId ? "Nova Senha" : "Senha Provisória"}</label>
                 <Input 
                   value={password} onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••" type="password" className="bg-background/50 border-border/50" 
+                  placeholder={editingId ? "Deixe em branco para manter a atual" : "••••••"} type="password" className="bg-background/50 border-border/50" 
                 />
               </div>
               <div className="space-y-2">
@@ -145,8 +179,8 @@ export default function AdminContasPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setIsCreating(false)} className="font-rajdhani">CANCELAR</Button>
-              <Button onClick={handleCreateUser} className="font-rajdhani font-bold bg-green-600 hover:bg-green-700">SALVAR E CRIAR CONTA</Button>
+              <Button variant="ghost" onClick={() => { setIsCreating(false); setEditingId(null); }} className="font-rajdhani">CANCELAR</Button>
+              <Button onClick={handleSaveUser} className="font-rajdhani font-bold bg-green-600 hover:bg-green-700">{editingId ? "SALVAR ALTERAÇÕES" : "SALVAR E CRIAR CONTA"}</Button>
             </div>
           </CardContent>
         </Card>
@@ -190,7 +224,7 @@ export default function AdminContasPage() {
                       {new Date(account.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="text-blue-400 hover:text-blue-300"><Edit className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleEditUser(account)} className="text-blue-400 hover:text-blue-300"><Edit className="w-4 h-4" /></Button>
                       {account.role !== "superadmin" && (
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(account.id)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
                       )}
